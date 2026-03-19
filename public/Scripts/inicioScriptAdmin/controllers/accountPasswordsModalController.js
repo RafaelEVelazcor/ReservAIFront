@@ -1,6 +1,6 @@
 import { fetchAccountById } from '../services/adminUserService.js';
 import { showMessage } from '../service/uiHelpersAdmin.js';
-import { renderAdminPasswordList } from '../service/renderListAdmin.js';
+import { renderAdminPasswordList } from '../service/renderlistadmin.js';
 import { setupAdminModals, openAdminPasswordModal } from './modalControllerAdmin.js';
 import { deleteAccount } from '../services/adminUserService.js';
 import { showDeleteConfirmModal } from '../service/uiHelpersAdmin.js';
@@ -165,10 +165,10 @@ export async function openAccountPasswordsModal(account) {
     // Cierre del modal de ver contraseña también actualiza la lista
     const closeBtns = viewModal.querySelectorAll('.close-btn');
     closeBtns.forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.onclick = () => {
             viewModal.classList.remove('show');
             document.dispatchEvent(new CustomEvent('passwordUpdated', { detail: { accountId: account.id } }));
-        });
+        };
     });
 
     // --- Lógica para crear contraseña dentro del modal ---

@@ -47,6 +47,15 @@ function formatDate(dateString) {
     return date.toLocaleDateString('es-ES');
 }
 
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function getStatusBadge(status, cancelAtPeriodEnd = false) {
     const statusLower = (status || '').toLowerCase();
     
@@ -321,24 +330,29 @@ async function fetchSubscriptions(page = 1) {
                 let statusClass = 'card-status';
                 if (badge.class === 'status-inactive') statusClass += ' inactive';
                 if (badge.class === 'status-pending') statusClass += ' pending';
+                                const planName = escapeHtml(plan.plan_name || 'Plan');
+                                const planAmount = escapeHtml(plan.amount ?? '-');
+                                const badgeText = escapeHtml((badge.text || '').toUpperCase());
+                                const startDate = escapeHtml(formatDate(plan.current_period_start));
+                                const endDate = escapeHtml(formatDate(plan.current_period_end));
                 return `
                 <div class="subscription-card">
                   <div class="card-header">
-                    <span class="card-icon"><img src="${getPlanIcon(plan.plan_name)}" alt="${plan.plan_name}" style="width: 32px; height: 32px; object-fit: contain;"></span>
+                                        <span class="card-icon"><img src="${getPlanIcon(plan.plan_name)}" alt="${planName}" style="width: 32px; height: 32px; object-fit: contain;"></span>
                     <div>
-                      <div class="card-title">${plan.plan_name || 'Plan'}</div>
-                      <div class="card-price">$${plan.amount} / mes</div>
+                                            <div class="card-title">${planName}</div>
+                                            <div class="card-price">$${planAmount} / mes</div>
                     </div>
                   </div>
-                  <div class="${statusClass}">${badge.text.toUpperCase()}</div>
+                                    <div class="${statusClass}">${badgeText}</div>
                   <div class="card-dates">
                     <div>
                       <div class="card-date-label"><i class="fa-regular fa-calendar"></i> FECHA DE INICIO</div>
-                      <div class="card-date-value">${formatDate(plan.current_period_start)}</div>
+                                            <div class="card-date-value">${startDate}</div>
                     </div>
                     <div>
                       <div class="card-date-label"><i class="fa-regular fa-calendar"></i> FECHA DE FIN</div>
-                      <div class="card-date-value">${formatDate(plan.current_period_end)}</div>
+                                            <div class="card-date-value">${endDate}</div>
                     </div>
                   </div>
                 </div>

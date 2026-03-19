@@ -41,7 +41,7 @@ export function setupAdminModals({ addBtn, createModal, viewModal, fields, listE
         btn.addEventListener('click', () => {
             const modal = btn.closest('.modalcreate');
             if (modal) {
-                modal.style.display = 'none';
+                modal.classList.remove('show');
                 // Limpiar el formulario al cerrar
                 clearCreatePasswordForm();
             }
@@ -51,7 +51,7 @@ export function setupAdminModals({ addBtn, createModal, viewModal, fields, listE
     // Cerrar modal de crear contraseña al hacer click fuera
     createModal?.addEventListener('click', function(e) {
         if (e.target === this) {
-            this.style.display = 'none';
+            this.classList.remove('show');
             clearCreatePasswordForm();
         }
     });
@@ -284,9 +284,6 @@ export async function openAdminPasswordModal(accountId, passwordId) {
                         const newValue = input.value.trim();
                         if (newValue && newValue !== currentValue) {
                             try {
-                                const pass = await fetchPasswordById(accountId, fullPass.id);
-                                
-
                                 await updatePasswordAttribute(accountId, fullPass.id, "password", newValue);
                                 showMessage("Contraseña actualizada");
                                 fullPass.password = newValue;

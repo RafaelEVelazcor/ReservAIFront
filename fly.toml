@@ -3,8 +3,6 @@ primary_region = "dfw"
 
 [build]
   dockerfile = "Dockerfile"
-  [build.args]
-    STAGE = "production"
 
 [http_service]
   internal_port = 3002

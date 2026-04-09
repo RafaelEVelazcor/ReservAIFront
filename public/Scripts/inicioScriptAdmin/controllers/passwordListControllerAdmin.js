@@ -1,5 +1,5 @@
 import { fetchAccounts, fetchAccountById } from '../services/adminUserService.js';
-import { renderAdminAccountList } from '../service/renderListAdmin.js';
+import { renderAdminAccountList } from '../service/renderlistadmin.js';
 import { showMessage } from '../service/uiHelpersAdmin.js';
 
 function isUUID(str) {

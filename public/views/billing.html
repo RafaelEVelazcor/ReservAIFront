@@ -48,28 +48,54 @@
     </div>
 
     <div class="billing-content">
-      <table class="billing-table">
-        <thead>
-          <tr>
-            <th>Suscripción</th>
-            <th>Costo</th>
-            <th>Fecha de Inicio</th>
-            <th>Fecha de Fin</th>
-            <th>Estatus</th>
-          </tr>
-        </thead>
-        <tbody id="billingTableBody">
-          <!-- Los datos se cargarán dinámicamente aquí -->
-        </tbody>
-      </table>
-
-     <!--  <div class="pagination" style="display: none;">
-        <button id="prevBilling" type="button" class="pagination-btn"><</button>
-        <span id="billingPageInfo">Página 1</span>
-        <button id="nextBilling" type="button" class="pagination-btn">></button>
+      <div id="billingCardsContainer" class="billing-cards-list">
+        <!-- Las tarjetas de suscripción se cargarán dinámicamente aquí -->
       </div>
-    </div> -->
+    </div>
   </main>
+    
+
+    <!-- FAB para agregar suscripción -->
+    <button class="fab" id="addSubscriptionBtn" aria-label="Agregar suscripciones">+</button>
+
+    <!-- Modal de advertencia -->
+
+    <div id="warningModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <span class="modal-icon">&#9888;</span>
+          <span class="modal-title">CUIDADO</span>
+        </div>
+        <div class="modal-body">
+          <p>Si no tienes un contrato firmado para el servicio, te recomendamos no suscribirte aún. En su lugar, contáctanos para formalizar la venta.</p>
+          <p>En caso de suscribirte sin contrato, seguiremos las disposiciones establecidas en nuestros <a href="#">términos y condiciones</a>.</p>
+        </div>
+        <div class="modal-footer">
+          <button id="warningContinueBtn" class="modal-btn primary">Seguir</button>
+          <button id="warningCancelBtn" class="modal-btn">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal de selección de plan -->
+    <div id="planModal" class="modal">
+      <div class="modal-content">
+        <img src="/static/Images/ReservAiLogo.png" alt="ReservAI logo" class="modal-logo">
+        <div style="font-size:1.25rem;font-weight:600;margin-bottom:1.2rem;color:#fff;letter-spacing:0.01em;">Selecciona tu plan de suscripción</div>
+        <div class="plan-options-list">
+          <div class="plan-option" id="planBasicOption" tabindex="0">
+            <div class="plan-title">Plan Básico</div>
+            <div class="plan-price">$1699 MXN / mes</div>
+            <div class="plan-desc">Este plan cuenta con soporte medio, 3 modificaciones sencillas en el comportamiento de la IA sin costo adicional, 1 sola sucursal con un solo número telefónico y un máximo 3 agendas registradas.</div>
+          </div>
+          <div class="plan-option" id="planPremiumOption" tabindex="0">
+            <div class="plan-title">Plan Premium</div>
+            <div class="plan-price">$2699 MXN / mes</div>
+            <div class="plan-desc">El plan incluye soporte alto, 10 modificaciones sencillas en el comportamiento de la IA sin costo adicional tambien máximo 4 sucursales (cada una con su teléfono individual) y Máximo 15 agendas registradas.</div>
+          </div>
+        </div>
+      </div>
+    </div>
 
   <script type="module" src="/static/Scripts/billing.js"></script>
 </body>

@@ -9,9 +9,11 @@ export function renderPasswordList(passwords, listEl) {
     item.className = "password-item";
     item.dataset.id = pass.id;
     item.dataset.idx = idx;
+    const safeName = escapeHtml(pass.name || 'Sin nombre');
+    const safePassword = escapeHtml(pass.password || '');
     item.innerHTML = `
-      <span><b>${pass.name}</b></span>
-      <span>${pass.password}</span>
+      <span><b>${safeName}</b></span>
+      <span>${safePassword}</span>
       <button class="view-btn">Ver / Editar</button>
     `;
     listEl.appendChild(item);

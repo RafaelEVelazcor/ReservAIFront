@@ -16,6 +16,23 @@ const planIcons = {
     'default': '/static/Images/LogoReservAi.png'
 };
 
+// --------- MODAL DE ERROR GLOBAL ---------
+function showError(message) {
+    let errorModal = document.getElementById('globalErrorModal');
+    if (!errorModal) {
+        errorModal = document.createElement('div');
+        errorModal.id = 'globalErrorModal';
+        errorModal.className = 'global-error-modal';
+        document.body.appendChild(errorModal);
+    }
+    errorModal.textContent = message;
+    errorModal.style.display = 'block';
+    setTimeout(() => {
+        errorModal.style.display = 'none';
+    }, 4000);
+}
+
+
 function getPlanIcon(name) {
     const planName = (name || '').toLowerCase();
     for (const [key, icon] of Object.entries(planIcons)) {
@@ -30,8 +47,23 @@ function formatDate(dateString) {
     return date.toLocaleDateString('es-ES');
 }
 
-function getStatusBadge(status) {
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function getStatusBadge(status, cancelAtPeriodEnd = false) {
     const statusLower = (status || '').toLowerCase();
+    
+    // Si está marcado para cancelar al final del período pero está activo
+    if (cancelAtPeriodEnd && (statusLower === 'active' || statusLower === 'activo')) {
+        return { class: 'status-pending', text: 'Cancelado/Activo' };
+    }
+    
     if (statusLower === 'active' || statusLower === 'activo') {
         return { class: 'status-active', text: 'Activo' };
     } else if (statusLower === 'inactive' || statusLower === 'inactivo') {
@@ -42,129 +74,299 @@ function getStatusBadge(status) {
     return { class: 'status-inactive', text: statusLower };
 }
 
+// --------- MODALES DE SUSCRIPCIÓN ---------
+function showModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.style.display = 'flex';
+}
+function hideModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.style.display = 'none';
+}
+
+// Obtener links de pago desde el endpoint /links
+async function fetchPaymentLinks() {
+    const token = SessionStorageManager.getSession().access_token;
+    const url = `${BASE_URL}/billing/links`;
+    try {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': token
+            }
+        });
+        const text = await response.text();
+        
+        if (response.status === 418) {
+            window.location.href = '/login';
+            return null;
+        }
+        
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            data = {};
+        }
+        if (response.status === 200 && data.paymentLinks) {
+            return data.paymentLinks;
+        }
+        let msg = '';
+        if (response.status === 400) {
+            msg = 'La cuenta no existe en la base de datos';
+        } else if (response.status === 403 && (text.includes('not a client') || text.includes('Account is not a client'))) {
+            msg = 'La cuenta no es de tipo cliente';
+        } else if (response.status === 403) {
+            msg = 'Path traversal detectado (Forbidden)';
+        } else if (response.status === 404) {
+            msg = 'No existe un customer asociado';
+        } else if (response.status === 418 && text.includes('Token is required')) {
+            msg = 'No se envió el token';
+        } else if (response.status === 418) {
+            msg = 'El token es inválido';
+        } else if (response.status === 500) {
+            msg = 'Error creando sesiones o links de pago';
+        } else {
+            msg = `Error ${response.status}: ${text}`;
+        }
+        showError('No se pudieron obtener los links de pago: ' + msg);
+        return null;
+    } catch (err) {
+        showError('No se pudieron obtener los links de pago: ' + (err.message || err));
+        return null;
+    }
+}
+
+
+// Crear sesión del portal de facturación y redirigir al usuario
+export async function openStripeBillingPortal() {
+    const token = SessionStorageManager.getSession().access_token;
+    const url = `${BASE_URL}/billing/portal`;
+    try {
+        const response = await fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': token
+            }
+        });
+        const text = await response.text();
+        
+        if (response.status === 418) {
+            window.location.href = '/login';
+            return;
+        }
+        
+        let data;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {
+            data = {};
+        }
+        if (response.status === 200 && data.session && data.session.url) {
+            window.open(data.session.url, '_blank');
+            return;
+        }
+        // Manejo de errores según la tabla proporcionada
+        let msg = '';
+        if (response.status === 400) {
+            msg = 'La cuenta no existe en la base de datos';
+        } else if (response.status === 403 && (text.includes('not a client') || text.includes('Account is not a client'))) {
+            msg = 'La cuenta no es de tipo cliente';
+        } else if (response.status === 403) {
+            msg = 'Path traversal detectado (Forbidden)';
+        } else if (response.status === 404) {
+            msg = 'No existe un customer asociado';
+        } else if (response.status === 418 && text.includes('Token is required')) {
+            msg = 'No se envió el token';
+        } else if (response.status === 418) {
+            msg = 'El token es inválido';
+        } else if (response.status === 500) {
+            msg = 'Error creando la sesión del portal en Stripe';
+        } else {
+            msg = `Error ${response.status}: ${text}`;
+        }
+        console.error('[openStripeBillingPortal] Error:', msg);
+        showError('No se pudo abrir el portal de facturación: ' + msg);
+    } catch (err) {
+        console.error('[openStripeBillingPortal] Error en catch:', err);
+        showError('No se pudo abrir el portal de facturación: ' + (err.message || err));
+    }
+}
+
+// Crear customer en Stripe
+export async function createStripeCustomer() {
+    // Usar el modal de carga de Stripe si existe
+    const stripeLoadingModal = document.getElementById('stripeLoadingModal');
+    const stripeLoadingText = document.getElementById('stripeLoadingText');
+    const stripeModalIcon = document.getElementById('stripeModalSpinner');
+    if (stripeLoadingModal) stripeLoadingModal.style.display = 'flex';
+    if (stripeModalIcon) {
+        stripeModalIcon.style.display = 'block';
+    }
+    if (stripeLoadingText) {
+        stripeLoadingText.textContent = 'Creando customer en Stripe...';
+        stripeLoadingText.classList.remove('success', 'error');
+    }
+    try {
+        const token = SessionStorageManager.getSession().access_token;
+        const url = `${BASE_URL}/billing/customer`;
+        const response = await fetch(
+            url,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": token
+                }
+            }
+        );
+        
+        if (response.status === 418) {
+            window.location.href = '/login';
+            return null;
+        }
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            let msg = '';
+            if (response.status === 400 && errorText.includes('already exists')) {
+                msg = 'El customer ya existe para esta cuenta';
+            } else if (response.status === 400) {
+                msg = 'La cuenta no existe en la base de datos';
+            } else if (response.status === 403) {
+                msg = 'La cuenta no es de tipo cliente';
+            } else if (response.status === 418) {
+                msg = 'No se envió el token';
+            } else if (response.status === 500) {
+                msg = 'Error creando el customer en Stripe';
+            } else {
+                msg = `Error ${response.status}: ${errorText}`;
+            }
+            if (stripeLoadingText) {
+                stripeLoadingText.textContent = 'Error: ' + msg;
+                stripeLoadingText.classList.remove('success');
+                stripeLoadingText.classList.add('error');
+            }
+            if (stripeModalIcon) {
+                stripeModalIcon.style.display = 'none';
+            }
+            throw new Error(msg);
+        }
+        const data = await response.json();
+        if (stripeLoadingText) {
+            stripeLoadingText.textContent = '¡Customer creado correctamente!';
+            stripeLoadingText.classList.remove('error');
+            stripeLoadingText.classList.add('success');
+        }
+        if (stripeModalIcon) {
+            stripeModalIcon.style.display = 'none';
+        }
+        return data;
+    } catch (err) {
+        console.error('[createStripeCustomer] Error en catch:', err);
+        // El mensaje de error ya se muestra en el modal
+        throw err;
+    }
+}
 async function fetchSubscriptions(page = 1) {
     const loadingEl = document.getElementById('billingLoading');
     const errorEl = document.getElementById('billingError');
-    const tableBody = document.getElementById('billingTableBody');
-    
+    const cardsContainer = document.getElementById('billingCardsContainer');
+    if (cardsContainer) cardsContainer.innerHTML = '';
     if (loadingEl) loadingEl.style.display = 'block';
     if (errorEl) errorEl.style.display = 'none';
     
     try {
         const token = SessionStorageManager.getSession().access_token;
         
-
-         
-        // SIMULACIÓN DE ERROR 404 - Eliminar cuando el endpoint esté disponible
-        //throw new Error('404');
         
-        // DATOS DE PRUEBA - Eliminar cuando el endpoint esté disponible
-        const mockData = {
-            data: [
-                {
-                    id: 1,
-                    plan_name: "Plan Básico",
-                    price: 1699.99,
-                    start_date: "2024-01-15",
-                    end_date: "2025-01-15",
-                    status: "active"
-                },
-                {
-                    id: 2,
-                    plan_name: "Plan Pro",
-                    price: 2699.99,
-                    start_date: "2023-06-20",
-                    end_date: "2026-06-20",
-                    status: "active"
-                }
-            ],
-            current_page: page,
-            next_page: null
-        };
-
         // Endpoint para obtener planes del usuario
-        // const response = await fetch(
-        //     `${BASE_URL}/billing/plans?page=${page}`,
-        //     {
-        //         method: "GET",
-        //         headers: {
-        //             "Authorization": token
-        //         }
-        //     }
-        // );
+        const response = await fetch(
+            `${BASE_URL}/billing/status`,
+            {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": token
+                }
+            }
+        );
 
-        // if (response.status === 418) {
-        //     window.location.href = '/login';
-        //     return;
-        // }
 
-        // if (!response.ok) {
-        //     throw new Error('No se pudieron cargar los planes');
-        // }
-
-        // const data = await response.json();
-        const data = mockData; // USAR DATOS DE PRUEBA
-        const plans = data.data || data.plans || [];
-        const currentPage = data.current_page || page;
-        const nextPage = data.next_page || null;
-
-        // Renderizar tabla
-        if (plans.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="5" class="empty-message"><p>No tienes planes activos</p></td></tr>';
-        } else {
-            tableBody.innerHTML = plans.map(plan => `
-                <tr>
-                    <td>
-                        <div class="subscription-name">
-                            <span class="subscription-icon">
-                                <img src="${getPlanIcon(plan.plan_name || plan.name)}" alt="${plan.plan_name || plan.name}" style="width: 32px; height: 32px; object-fit: contain;">
-                            </span>
-                            <span>${plan.plan_name || plan.name || 'Plan'}</span>
-                        </div>
-                    </td>
-                    <td>
-                        <span class="cost">$${(plan.price || plan.amount || 0).toFixed(2)} / mes</span>
-                    </td>
-                    <td>
-                        <span class="date">Inicio: ${formatDate(plan.start_date || plan.current_period_start)}</span>
-                    </td>
-                    <td>
-                        <span class="date">Fin: ${formatDate(plan.end_date || plan.current_period_end)}</span>
-                    </td>
-                    <td>
-                        <span class="status-badge ${getStatusBadge(plan.status).class}">
-                            ${getStatusBadge(plan.status).text}
-                        </span>
-                    </td>
-                </tr>
-            `).join('');
-            tableBody.style.display = 'table-row-group';
+        if (response.status === 418) {
+            window.location.href = '/login';
+            return;
         }
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            
+            if (response.status === 400) {
+                throw new Error('Account does not exist');
+            } else if (response.status === 403) {
+                throw new Error('Account is not a client');
+            } else if (response.status === 404) {
+                throw new Error('404');
+            } else if (response.status === 500) {
+                throw new Error('Internal server error');
+            }
+            throw new Error(`Error ${response.status}: No se pudieron cargar los planes`);
+        }
+
+        const data = await response.json();
+        
+
+        let plans = data.data || data.subscriptions || [];
+
+        // Renderizar tarjetas de suscripción
+        if (!cardsContainer) return;
+        if (plans.length === 0) {
+            cardsContainer.innerHTML = '<div class="empty-message"><p>No tienes planes activos</p></div>';
+        } else {
+            cardsContainer.innerHTML = plans.map(plan => {
+                const badge = getStatusBadge(plan.status, plan.cancel_at_period_end);
+                let statusClass = 'card-status';
+                if (badge.class === 'status-inactive') statusClass += ' inactive';
+                if (badge.class === 'status-pending') statusClass += ' pending';
+                                const planName = escapeHtml(plan.plan_name || 'Plan');
+                                const planAmount = escapeHtml(plan.amount ?? '-');
+                                const badgeText = escapeHtml((badge.text || '').toUpperCase());
+                                const startDate = escapeHtml(formatDate(plan.current_period_start));
+                                const endDate = escapeHtml(formatDate(plan.current_period_end));
+                return `
+                <div class="subscription-card">
+                  <div class="card-header">
+                                        <span class="card-icon"><img src="${getPlanIcon(plan.plan_name)}" alt="${planName}" style="width: 32px; height: 32px; object-fit: contain;"></span>
+                    <div>
+                                            <div class="card-title">${planName}</div>
+                                            <div class="card-price">$${planAmount} / mes</div>
+                    </div>
+                  </div>
+                                    <div class="${statusClass}">${badgeText}</div>
+                  <div class="card-dates">
+                    <div>
+                      <div class="card-date-label"><i class="fa-regular fa-calendar"></i> FECHA DE INICIO</div>
+                                            <div class="card-date-value">${startDate}</div>
+                    </div>
+                    <div>
+                      <div class="card-date-label"><i class="fa-regular fa-calendar"></i> FECHA DE FIN</div>
+                                            <div class="card-date-value">${endDate}</div>
+                    </div>
+                  </div>
+                </div>
+                `;
+            }).join('');
+        }
+        // Mostrar el contenedor de tarjetas cuando termina de cargar
+        // (No es necesario mostrar/ocultar billingTable, ya no existe)
 
         // Agregar animación a la tabla
         const billingContent = document.querySelector('.billing-content');
         if (billingContent) {
             billingContent.style.animation = 'slideInContent 0.5s ease-out';
         }
-
-  /*       // Actualizar paginación
-        const paginationEl = document.querySelector('.pagination');
-        const pageInfoEl = document.getElementById('billingPageInfo');
-        
-        if (paginationEl && pageInfoEl) {
-            pageInfoEl.textContent = `Página ${currentPage}`;
-            paginationEl.style.display = plans.length > 0 ? 'flex' : 'none';
-            
-            const prevBtn = document.getElementById('prevBilling');
-            const nextBtn = document.getElementById('nextBilling');
-            
-            if (prevBtn) prevBtn.disabled = currentPage <= 1;
-            if (nextBtn) nextBtn.disabled = !nextPage;
-        }
-
-        // Guardar estado de paginación
-        window.currentBillingPage = currentPage;
-        window.nextBillingPage = nextPage; */
 
     } catch (err) {
         console.error("Error al cargar planes:", err);
@@ -218,16 +420,50 @@ async function fetchSubscriptions(page = 1) {
                             margin-top: 0.5rem;
                         ">Configurar ahora →</a>
                     </div>
+                    <div id="stripeLoadingModal">
+                        <div class="stripe-modal-content">
+                            <div id="stripeModalSpinner" class="spinner" style="display: block;"></div>
+                            <div id="stripeLoadingText">Creando customer en Stripe...</div>
+                        </div>
+                    </div>
                 `;
-                
                 // Event listener para el link de Stripe
                 const stripeConfigLink = document.getElementById('stripeConfigLink');
+                const stripeLoadingModal = document.getElementById('stripeLoadingModal');
+                const stripeLoadingText = document.getElementById('stripeLoadingText');
+                const stripeModalIcon = document.getElementById('stripeModalSpinner');
                 if (stripeConfigLink) {
-                    stripeConfigLink.addEventListener('click', (e) => {
+                    stripeConfigLink.addEventListener('click', async (e) => {
                         e.preventDefault();
-                        // TODO: Reemplazar con la URL correcta de Stripe cuando esté disponible
-                        // window.location.href = `${BASE_URL}/billing/stripe/setup`;
-                        alert("Redirigiendo a configuración de Stripe...");
+                        if (stripeLoadingModal) stripeLoadingModal.style.display = 'flex';
+                        if (stripeModalIcon) stripeModalIcon.style.display = 'block';
+                        if (stripeLoadingText) {
+                            stripeLoadingText.textContent = 'Creando customer en Stripe...';
+                            stripeLoadingText.classList.remove('success', 'error');
+                        }
+                        try {
+                            await createStripeCustomer();
+                            if (stripeLoadingText) {
+                                stripeLoadingText.textContent = '¡Customer creado correctamente!';
+                                stripeLoadingText.classList.remove('error');
+                                stripeLoadingText.classList.add('success');
+                            }
+                            if (stripeModalIcon) stripeModalIcon.style.display = 'none';
+                            setTimeout(() => {
+                                if (stripeLoadingModal) stripeLoadingModal.style.display = 'none';
+                                window.location.reload();
+                            }, 1200);
+                        } catch (err) {
+                            if (stripeLoadingText) {
+                                stripeLoadingText.textContent = 'Error: ' + (err.message || 'No se pudo crear el customer');
+                                stripeLoadingText.classList.remove('success');
+                                stripeLoadingText.classList.add('error');
+                            }
+                            if (stripeModalIcon) stripeModalIcon.style.display = 'none';
+                            setTimeout(() => {
+                                if (stripeLoadingModal) stripeLoadingModal.style.display = 'none';
+                            }, 2200);
+                        }
                     });
                 }
             } else {
@@ -240,6 +476,63 @@ async function fetchSubscriptions(page = 1) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+        // FAB y modales de suscripción
+        const fabBtn = document.getElementById('addSubscriptionBtn');
+        const warningModal = document.getElementById('warningModal');
+        const warningContinueBtn = document.getElementById('warningContinueBtn');
+        const warningCancelBtn = document.getElementById('warningCancelBtn');
+        const planModal = document.getElementById('planModal');
+        const planBasicOption = document.getElementById('planBasicOption');
+        const planPremiumOption = document.getElementById('planPremiumOption');
+        let paymentLinksCache = null;
+
+        if (fabBtn) {
+            fabBtn.addEventListener('click', () => {
+                showModal('warningModal');
+            });
+        }
+        if (warningCancelBtn) {
+            warningCancelBtn.addEventListener('click', () => {
+                hideModal('warningModal');
+            });
+        }
+        if (warningContinueBtn) {
+            warningContinueBtn.addEventListener('click', async () => {
+                hideModal('warningModal');
+                // Obtener links de pago y mostrar modal de planes
+                paymentLinksCache = await fetchPaymentLinks();
+                if (paymentLinksCache) {
+                    showModal('planModal');
+                }
+            });
+        }
+        // Cerrar modal de planes al hacer click fuera del contenido
+        if (planModal) {
+            planModal.addEventListener('click', (e) => {
+                if (e.target === planModal) hideModal('planModal');
+            });
+        }
+        // Selección de plan
+        if (planBasicOption) {
+            planBasicOption.addEventListener('click', () => {
+                if (paymentLinksCache && paymentLinksCache.basico && paymentLinksCache.basico.url) {
+                    window.open(paymentLinksCache.basico.url, '_blank');
+                    hideModal('planModal');
+                } else {
+                    showError('No se encontró el link de pago para el plan Básico.');
+                }
+            });
+        }
+        if (planPremiumOption) {
+            planPremiumOption.addEventListener('click', () => {
+                if (paymentLinksCache && paymentLinksCache.premium && paymentLinksCache.premium.url) {
+                    window.open(paymentLinksCache.premium.url, '_blank');
+                    hideModal('planModal');
+                } else {
+                    showError('No se encontró el link de pago para el plan Premium.');
+                }
+            });
+        }
     // Logout
     const logoutBtn = document.getElementById("logout");
     if (logoutBtn) {
@@ -259,40 +552,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Gestionar Pagos (placeholder para futura funcionalidad)
+    // Gestionar Pagos: abrir portal de Stripe
     const manageBillingBtn = document.getElementById("manageBillingBtn");
     if (manageBillingBtn) {
         manageBillingBtn.addEventListener("click", async () => {
-            // Endpoint para abrir la página de gestión de pagos
-            // TODO: Implementar cuando el endpoint esté disponible
-            // window.location.href = `${BASE_URL}/billing/manage`;
-            alert("Funcionalidad de gestión de planes en desarrollo");
+            await openStripeBillingPortal();
         });
     }
-
-    // Paginación
-/*     const prevBtn = document.getElementById('prevBilling');
-    const nextBtn = document.getElementById('nextBilling');
-
-    if (prevBtn) {
-        prevBtn.addEventListener('click', () => {
-            const currentPage = window.currentBillingPage || 1;
-            if (currentPage > 1) {
-                fetchSubscriptions(currentPage - 1);
-            }
-        });
-    }
-
-    if (nextBtn) {
-        nextBtn.addEventListener('click', () => {
-            const nextPage = window.nextBillingPage;
-            if (nextPage) {
-                fetchSubscriptions(nextPage);
-            }
-        });
-    }
- */
-
     // Cargar datos iniciales
     fetchSubscriptions(1);
 });

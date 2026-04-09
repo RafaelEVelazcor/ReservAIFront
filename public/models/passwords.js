@@ -39,19 +39,23 @@ export default class Password {
     }
 
     toHTML() {
+    const safeName = escapeHtml(this.name || 'Sin nombre');
+    const safeDescription = escapeHtml(this.description || '');
+    const safePasswordAttr = escapeHtmlAttr(this.password || '');
+
     return `
         <div class="password-details">
         
             <div class="password-info">
                 <div class="password-name">
-                    <strong>Nombre:</strong> <span class="editable-name">${this.name || 'Sin nombre'}</span>
+                    <strong>Nombre:</strong> <span class="editable-name">${safeName}</span>
                      ${this.updateableByClient ? '<span class="edit-icon" title="Editar nombre"> <i class="fas fa-pen-to-square"></i></span>' : ''}
                 </div>
                 <div class="password-field">
                     <div class="password-value-container">
                         <strong>Contraseña:</strong>
                         <div class="password-display">
-                            <div class="password-text" data-password="${this.password || ''}">*************</div>
+                            <div class="password-text" data-password="${safePasswordAttr}">*************</div>
                             ${this.updateableByClient ? '<span class="edit-icon" title="Editar contraseña"><i class="fas fa-pen-to-square"></i></span>' : ''}
                             <div class="password-actions">
                                 <button class="toggle-password-btn" type="button" title="Mostrar contraseña">
@@ -65,7 +69,7 @@ export default class Password {
                     </div>
                 </div>
                 <div class="password-description">
-                    <strong>Descripción:</strong> <span class="editable-description">${this.description || ''}</span>
+                    <strong>Descripción:</strong> <span class="editable-description">${safeDescription}</span>
                      ${this.updateableByClient ? '<span class="edit-icon" title="Editar descripción"><i class="fas fa-pen-to-square"></i></span>' : ''}
                 </div>
             </div>
@@ -73,4 +77,17 @@ export default class Password {
     `;
     }
 
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function escapeHtmlAttr(value) {
+    return escapeHtml(value);
 }

@@ -7,10 +7,11 @@ export function renderAdminAccountList(accounts, listEl) {
         listEl.innerHTML = "<div class='account-item'>No se encontraron cuentas.</div>";
         return;
     }
+    const getSafe = (value, fallback) => escapeHtml(value || fallback);
     listEl.innerHTML = accounts.map(acc => `
         <div class="account-item" data-id="${acc.id}">
-            <div><b>Email:</b> ${acc.email || 'Sin correo'}</div>
-            <div><b>Nombre:</b> ${acc.name || acc.nombre || 'Sin nombre'}</div>
+            <div><b>Email:</b> ${getSafe(acc.email, 'Sin correo')}</div>
+            <div><b>Nombre:</b> ${getSafe(acc.name || acc.nombre, 'Sin nombre')}</div>
         </div>
     `).join('');
     listEl.querySelectorAll('.account-item').forEach(item => {
